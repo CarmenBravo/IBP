@@ -1,0 +1,214 @@
+# Retieve TAIR10 gene annotation:
+wget ftp://ftp.arabidopsis.org/home/tair/Genes/TAIR10_genome_release/TAIR10_gff3/TAIR10_GFF3_genes.gff
+
+# Transfer annotations to VSC folder:
+sudo scp -p -r TAIR10_GFF3_genes.gff vsc31305@login2.hpc.kuleuven.be:~/IBP
+
+# Check modules available at hpc:
+modules av
+
+# Load cufflinks module:
+module load Cufflinks
+
+# Convert gff to gtf:
+gffread TAIR10_GFF3_genes.gff -T -o TAIR10_GTF_genes.gtf
+
+# Install flux-simulator locally:
+git clone http://sammeth.net/bitbucket/scm/barna/barna.git
+cd barna
+git checkout develop
+cd barna.simulator
+../gradlew dist
+
+# Copy flux simulator directory. Download from http://sammeth.net/confluence/display/SIM/2+-+Download
+# and copy myPara.par file (from https://github.com/ruolin/ASmethodsBenchmarking) in the folder before this:
+
+sudo scp -p -r flux-simulator-1.2.1 vsc31305@login2.hpc.kuleuven.be:~/IBP
+
+# To run flux-simulator from folder:
+bin/flux-simulator
+
+# To make flux-simulator executable from everywhere:
+export PATH=$PATH:/user/leuven/313/vsc31305/IBP/flux-simulator-1.2.1/bin
+
+# Get reference Fasta file
+wget ftp://ftp.arabidopsis.org/home/tair/Genes/TAIR10_genome_release/TAIR10_chromosome_files/TAIR10_chr_all.fas
+
+# I had to move everything to $VSC_DATA (quota exceeded). Work in this directory, no quota limit!:
+mv IBP $VSC_DATA
+cd $VSC_DATA
+
+# Replace headers of the genome fasta file to ChrX (as in the gtf file). Run perl script.
+perl split.pl *.fas
+
+# Copy bam files to the hpc (It will take ages, so prepare for this. It is also a huge amount of data (almost 40GB) so if you don’t want to loose all your kotnet data steal internet somewhere else.
+sudo scp -p -r bam_files vsc31305@login2.hpc.kuleuven.be:/data/leuven/313/vsc31305/IBP
+
+# Convert BAM to SAM. Takes a while:
+for file in ./*.bam
+    do
+    echo $file 
+    samtools view -h $file > ${file/.bam/.sam}
+    done
+
+# Load python 2.7+ and HTSeq
+module load Python/2.7.6-foss-2014a
+module load HTSeq
+
+# Install rpy2 in vsc:
+mkdir -p "${VSC_HOME}/python_lib/lib/python2.7/site-packages/"
+export PYTHONPATH="${VSC_HOME}/python_lib/lib/python2.7/site-packages/:${PYTHONPATH}"
+module load R
+pip install --install-option="--prefix=${VSC_HOME}/python_lib" rpy2
+
+# Test help:
+module load scipy
+python cal_NB_counts.py -h 
+
+# Change gene notation to avoid crash:
+cat TAIR10_GFF3_genes.gff | cut -f1 | uniq -c
+samtools view -H 48U_WT_MOCH_1.bam
+samtools view -h 48U_WT_MOCH_1.bam | awk 'BEGIN{FS=OFS="\t"} (/^@/ && !/@SQ/){print $0} $2~/^SN:[1-9]|^SN:Pt|^SN:Mt/{print $0}  $3~/^[1-9]|Pt|Mt/{$3="Chr"$3; print $0} ' | sed 's/SN:/SN:Chr/g' | sed 's/Mt/M/g' | sed 's/Pt/C/g' | samtools view -bS - > MOCH.bam
+samtools view -H MOCH.bam
+samtools view -h 48U_WT_PQ_1.bam | awk 'BEGIN{FS=OFS="\t"} (/^@/ && !/@SQ/){print $0} $2~/^SN:[1-9]|^SN:Pt|^SN:Mt/{print $0}  $3~/^[1-9]|Pt|Mt/{$3="Chr"$3; print $0} ' | sed 's/SN:/SN:Chr/g' | sed 's/Mt/M/g' | sed 's/Pt/C/g' | samtools view -bS - > PQ.bam
+samtools view -H PQ.bam
+mv 48U_WT_MOCH_1.bam 48U_WT_MOCH_1.bam.old
+mv 48U_WT_PQ_1.bam 48U_WT_PQ_1.bam.old
+
+# Remove old same and redo from these.
+rm *.sam
+for file in ./*.bam
+    do
+    echo $file 
+    samtools view -h $file > ${file/.bam/.sam}
+    done
+
+# Run. Needs at least two samples per group, here I’m putting two twice:
+python cal_NB_counts.py TAIR10_GFF3_genes.gff -g1 bam_files/MOCH.sam bam_files/MOCH.sam -g2 bam_files/PQ.sam bam_files/PQ.sam 
+
+# Error again:
+number of genes 0
+Traceback (most recent call last):
+  File "cal_NB_counts.py", line 201, in <module>
+    if __name__ == '__main__': main()
+  File "cal_NB_counts.py", line 176, in main
+    counts1=meanVar(group1_f, gff_file,'group1')	
+  File "cal_NB_counts.py", line 107, in meanVar
+    _dict_counts=countSam(sam_file, _genes,_dict_counts, idx)
+  File "cal_NB_counts.py", line 53, in countSam
+    for alnmt in _sam_file:
+  File "/data/leuven/software/biomed/HTSeq/0.6.1p1-foss-2014a-Python-2.7.6/lib/python2.7/site-packages/HTSeq-0.6.1p1-py2.7-linux-x86_64.egg/HTSeq/__init__.py", line 536, in __iter__
+    algnt = SAM_Alignment.from_SAM_line( line )
+  File "_HTSeq.pyx", line 1323, in HTSeq._HTSeq.SAM_Alignment.from_SAM_line (src/_HTSeq.c:25356)
+ValueError: ("Malformed SAM line: MRNM == '*' although flag bit &0x0008 cleared", 'line 113')
+# This happens when the record shows that the read is paired, but there is no mate information.
+
+# Check how many unavailable mates we have:
+samtools view -h MOCH.sam | cut -f7 | sort | uniq -c
+      9 
+44206976 =
+2241302 *
+
+samtools view -h PQ.sam | cut -f7 | sort | uniq -c
+      9 
+51660112 =
+2188501 *
+
+# Delete by line. Takes ages and errors referring to other lines still appear: 
+sed -i 113d MOCH.sam 
+
+# Chech stats:
+samtools flagstat bam_files/MOCH.sam
+	46448278 + 0 in total (QC-passed reads + QC-failed reads)
+	1929324 + 0 secondary
+	0 + 0 supplementary
+	0 + 0 duplicates
+	46448278 + 0 mapped (100.00% : N/A)
+	44518954 + 0 paired in sequencing
+	22166299 + 0 read1
+	22352655 + 0 read2
+	41734802 + 0 properly paired (93.75% : N/A)
+	42521580 + 0 with itself and mate mapped
+	1997374 + 0 singletons (4.49% : N/A)
+	172636 + 0 with mate mapped to a different chr
+	163534 + 0 with mate mapped to a different chr (mapQ>=5)
+samtools flagstat bam_files/PQ.sam
+	53848613 + 0 in total (QC-passed reads + QC-failed reads)
+	2296736 + 0 secondary
+	0 + 0 supplementary
+	0 + 0 duplicates
+	53848613 + 0 mapped (100.00% : N/A)
+	51551877 + 0 paired in sequencing
+	25831280 + 0 read1
+	25720597 + 0 read2
+	48840880 + 0 properly paired (94.74% : N/A)
+	49522568 + 0 with itself and mate mapped
+	2029309 + 0 singletons (3.94% : N/A)
+	88790 + 0 with mate mapped to a different chr
+	83640 + 0 with mate mapped to a different chr (mapQ>=5)
+
+# Selecting properly paired reads and discarding unmapped and 'mate unmapped' reads: 
+rm *.sam
+for file in ./*.bam
+    do
+    echo $file 
+    samtools view -h -F 12 -f 3 $file > ${file/.bam/.sam}
+    done
+
+# After this:
+
+samtools flagstat PQ.sam
+	51040674 + 0 in total (QC-passed reads + QC-failed reads)
+	2199794 + 0 secondary
+	0 + 0 supplementary
+	0 + 0 duplicates
+	51040674 + 0 mapped (100.00% : N/A)
+	48840880 + 0 paired in sequencing
+	24420440 + 0 read1
+	24420440 + 0 read2
+	48840880 + 0 properly paired (100.00% : N/A)
+	48840880 + 0 with itself and mate mapped
+	0 + 0 singletons (0.00% : N/A)
+	560 + 0 with mate mapped to a different chr
+	0 + 0 with mate mapped to a different chr (mapQ>=5)
+
+samtools flagstat MOCH.sam
+	43563266 + 0 in total (QC-passed reads + QC-failed reads)
+	1828464 + 0 secondary
+	0 + 0 supplementary
+	0 + 0 duplicates
+	43563266 + 0 mapped (100.00% : N/A)
+	41734802 + 0 paired in sequencing
+	20867401 + 0 read1
+	20867401 + 0 read2
+	41734802 + 0 properly paired (100.00% : N/A)
+	41734802 + 0 with itself and mate mapped
+	0 + 0 singletons (0.00% : N/A)
+	530 + 0 with mate mapped to a different chr
+	0 + 0 with mate mapped to a different chr (mapQ>=5)
+
+# Still with errors. Remove all lines with *:
+ValueError: ("Malformed SAM line: MRNM == '*' although flag bit &0x0008 cleared", 'line 582654')
+sed -i '/\t\*\t/d' MOCH.sam
+sed -i '/\t\*\t/d' PORQUE.sam
+
+# Fixing R error
+module load R/3.2.1-foss-2014a-x11-tcl
+
+# Run again: 
+python cal_NB_counts.py TAIR10_GFF3_genes.gff -g1 bam_files/MOCH.sam bam_files/MOCH.sam -g2 bam_files/PQ.sam bam_files/PQ.sam 
+
+WOOOOOOOOOOOOORKS!!!!
+
+# Run in tmux
+module load tmux
+tmux new -s Simulation 
+python cal_NB_counts.py TAIR10_GFF3_genes.gff -g1 bam_files/MOCH.sam bam_files/MOCH.sam -g2 bam_files/PQ.sam bam_files/PQ.sam
+
+#CtrlB+D to get out. To get in:
+tmux attach -t Simulation
+#Number of genes 5885
+
+
+
+ 
