@@ -190,7 +190,7 @@ samtools flagstat MOCH.sam
 # Still with errors. Remove all lines with *:
 ValueError: ("Malformed SAM line: MRNM == '*' although flag bit &0x0008 cleared", 'line 582654')
 sed -i '/\t\*\t/d' MOCH.sam
-sed -i '/\t\*\t/d' PORQUE.sam
+sed -i '/\t\*\t/d' PQ.sam
 
 # Fixing R error
 module load R/3.2.1-foss-2014a-x11-tcl
@@ -209,6 +209,22 @@ python cal_NB_counts.py TAIR10_GFF3_genes.gff -g1 bam_files/MOCH.sam bam_files/M
 tmux attach -t Simulation
 #Number of genes 5885
 
+# The program crashed. We need to remove reads. Run the python script to generate a bed file with the annotated AS genes. Afterwards, filter the bam files and re do the sam and filter them:
 
+samtools view -b -L ASgenome_reg.bed  bam_files/MOCH.bam > bam_files/MOCH_filtered.bam
+samtools view -b -L ASgenome_reg.bed  bam_files/PQ.bam > bam_files/PQ.bam
 
+for file in ./*.bam
+    do
+    echo $file 
+    samtools view -h -F 12 -f 3 $file > ${file/.bam/.sam}
+    done
+
+sed -i '/\t\*\t/d' MOCH_filtered.sam
+sed -i '/\t\*\t/d' PQ_filtered.sam
+
+# Try simulation again:
+module load tmux
+tmux new -s Simulation 
+python cal_NB_counts.py TAIR10_GFF3_genes.gff -g1 bam_files/MOCH_filtered.sam bam_files/MOCH_filtered.sam -g2 bam_files/PQ_filtered.sam bam_files/PQ_filtered.sam
  
