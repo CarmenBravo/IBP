@@ -62,7 +62,7 @@ def countSam(_sam_file, _genes, _dic, _idx):
 			if len(intersection_set) == 1:
 				_dic[ list(intersection_set)[0] ][_idx] += 1
 		num_reads += 1
-		if num_reads % 100000 == 0:
+		if num_reads % 1000000 == 0:
 			sys.stderr.write("%d reads processed.\n" % num_reads)
 	return _dic
 
