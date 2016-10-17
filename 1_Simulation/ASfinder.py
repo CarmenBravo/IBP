@@ -17,6 +17,9 @@ from sets import Set
 GENE = Set(["gene", "transposable_element_gene","pseudogene"])
 EXON = Set(["exon", "pseudogenic_exon"])
 name_gff = raw_input('Select gff file:')
+
+num_lines = sum(1 for line in open(name_gff))
+
 file_gff=open(name_gff,'r')
 gff_file=HTSeq.GFF_Reader(file_gff)
 
@@ -27,16 +30,19 @@ chrom_list = list()
 start_list = list()
 end_list = list()
 strand_list = list()
+lines = 0
 for feature in gff_file:
+	lines += 1
 	if feature.type in GENE:
-		if len(transcript) > 1:
+		if len(transcript) > 1 or lines == num_lines:
 			count += 1
-			gene_list.append(feature.attr["ID"])
-			chrom_list.append(feature.iv.chrom)
-			start_list.append(feature.iv.start)
-			end_list.append(feature.iv.end)
-			strand_list.append(feature.iv.strand)
-			#print(feature.__dict__)
+			gene_list.append(gene_cand.attr["ID"])
+			chrom_list.append(gene_cand.iv.chrom)
+			start_list.append(gene_cand.iv.start)
+			end_list.append(gene_cand.iv.end)
+			strand_list.append(gene_cand.iv.strand)
+			#print(gene_cand.__dict__)
+		gene_cand = feature
 		transcript.clear()
 	if feature.type in EXON:
 		transcript.add(feature.attr["Parent"])
@@ -57,5 +63,3 @@ while i < len(gene_list):
 file_gff.close()
 ASids.close()
 ASregs.close()
-
-
