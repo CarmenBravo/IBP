@@ -42,6 +42,7 @@ name_gtf = args.gene_model
 NREPS=args.nreps
 MODE=args.mode
 NTARG = args.ntarg
+num_lines = sum(1 for line in open(name_gtf))
 
 ## define global variables
 def countSam(_sam_file, _genes, _dic, _idx):
@@ -89,8 +90,10 @@ def meanVar(_files, _gff_file , _output):
 		## Bug: Does not report last gene in gff if it has at least two transcript
 		transcript= set()
 		cur_line = None
+		lines = 0
 		for feature in _gff_file:
-			if feature.type in GENE:
+			lines += 1
+			if feature.type in GENE or lines == num_lines:
 				if len(transcript) >1:
 					_dict_counts[ cur_line.name ] = [0]*NFILE
 					_genes[cur_line.iv] += cur_line.name
@@ -99,7 +102,7 @@ def meanVar(_files, _gff_file , _output):
 				transcript.clear()
 			if feature.type in EXON:
 				transcript.add(feature.attr["Parent"])
-	print "number of genes", count
+	print "Number of genes", count
 	_file_raw_count = open(_output+'.rawcounts','w')
 	_file_nb_count = open(_output+'.nbcounts','w')
 	## This loop read through the input list and call countSam for each input file  
@@ -108,7 +111,7 @@ def meanVar(_files, _gff_file , _output):
 		_dict_counts=countSam(sam_file, _genes,_dict_counts, idx)
 		f.close()
 		idx += 1
-		sys.stderr.write("library %d has generated.\n" % idx)
+		sys.stderr.write("Library %d has generated.\n" % idx)
 	## Print raw counts in file specified by <out>
 	for key, value in sorted(_dict_counts.iteritems()):
 		_file_raw_count.write(key+"\t"+"\t".join(map(str,value))+"\n")
@@ -193,7 +196,7 @@ def main():
 			#print k,v
 
 	num_non0 = len(non0_exp_list)
-	sys.stderr.write("randomly choose %d out of %d genes as the final target genes that are to undergo AS\n" % (NTARG,num_non0))
+	sys.stderr.write("Randomly choose %d out of %d genes as the final target genes that are to undergo AS\n" % (NTARG,num_non0))
 	l=random.sample(xrange(num_non0), NTARG)
 	out = open('AS_genes_list.txt','w')
 	for i in l:
