@@ -17,16 +17,15 @@ except ImportError:
 
 parser = argparse.ArgumentParser(
 	description = "Generated negative binomial relationship gene-level read counts for a synthetic groups based on real experimental data",
-	epilog =  "Copy right: Ruolin Liu, ISU"    
+	epilog =  "Adaptation from Liu et al., 2014. Authors: Carmen Bravo, Emma Houben, Carlos de Lannoy"    
 	)
 
 parser.add_argument("gene_model", type=str, help='Reference annotation in GFF3 format.')
 parser.add_argument("-g1", "--group1", nargs='+', type=argparse.FileType('r'), required=True, help='First group sam files separated by space.')
 parser.add_argument("-g2", "--group2", nargs='+', type=argparse.FileType('r'), required=True, help='Second group sam files separated by space.')
+parser.add_argument("-as", "--ASgenes", type=str, required=True, help = "File of with gene IDs that will be alternatively spliced (if expressed).")
 parser.add_argument("-n", "--num-reps", type=int, default = 3, dest='nreps',
 	help = "Number of replicates. Default is 3." )
-parser.add_argument("-l", "--num-target-gene", type=int, default = 2000, dest='ntarg',
-	help = "Number of AS genes. Default is 2000. ")
 parser.add_argument("-m", "--mode", choices = ['AS-genes', 'all-genes'], default = 'AS-genes',
 	help = "Choose between AS-genes or all-genes: AS-genes simulates annotated AS genes only. all_genes simulates all genes in annotation.")
 
@@ -41,7 +40,6 @@ args = parser.parse_args()
 name_gtf = args.gene_model
 NREPS=args.nreps
 MODE=args.mode
-NTARG = args.ntarg
 num_lines = sum(1 for line in open(name_gtf))
 
 ## define global variables
@@ -87,7 +85,6 @@ def meanVar(_files, _gff_file , _output):
 				_genes[feature.iv] += feature.name
 				count +=1
 	if MODE == "AS-genes":
-		## Bug: Does not report last gene in gff if it has at least two transcript
 		transcript= set()
 		cur_line = None
 		lines = 0
@@ -196,10 +193,15 @@ def main():
 			#print k,v
 
 	num_non0 = len(non0_exp_list)
-	sys.stderr.write("Randomly choose %d out of %d genes as the final target genes that are to undergo AS\n" % (NTARG,num_non0))
-	l=random.sample(xrange(num_non0), NTARG)
+	name_as = args.ASgenes
+	file_asg = open(name_as, 'r')
 	out = open('AS_genes_list.txt','w')
-	for i in l:
-		out.write(non0_exp_list[i]+"\n")
+	numAS = 0
+	for line in file_asg:
+		if line.rstrip() in non0_exp_list:
+			out.write(line)
+			numAS += 1	
 	out.close()
+	file_asg.close()
+	sys.stderr.write("Selected %d out of %d genes as the final target genes that are to undergo AS\n" % (numAS,num_non0))
 if __name__ == '__main__': main()
