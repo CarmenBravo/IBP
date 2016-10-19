@@ -1,18 +1,19 @@
 #!/bin/bash -l
-## Job will last 1 hours.
-#PBS -l walltime=1:00:00
-## Job needs 1 nodes and 20 cores per node.
-#PBS -l nodes=1:ppn=20
+## Job will last 2 hours.
+#PBS -l walltime=3:00:00
+## Job needs 1 nodes and 16 cores per node.
+#PBS -l nodes=1:ppn=16
 ## Job request 60 GB of memory, all processes.
 #PBS -l mem=60gb
 ## Specify project credits name to use credits for running the job.
-#PBS -A lp_systemtb
+#PBS -A lp_symbiosys
 
 module load Python/2.7.6-foss-2014a
+module load R/3.2.1-foss-2014a-x11-tcl
 module load HTSeq
 module load scipy
 
 export PYTHONPATH="${VSC_HOME}/python_lib/lib/python2.7/site-packages/:${PYTHONPATH}"
 
-cd $VSC_DATA/IBP/
-python cal_NB_counts.py TAIR10_GFF3_genes.gff -g1 bam_files/MOCH_filtered.sam bam_files/MOCH_filtered.sam bam_files/PQ_filtered.sam -g2 bam_files/PQ_filtered.sam bam_files/PQ_filtered.sam bam_files/MOCH_filtered.sam
+cd $VSC_SCRATCH/IBP/
+python cal_NB_counts.py TAIR10_GFF3_genes.gff -g1 bam_files/PDB1f.sam bam_files/PDB2f.sam bam_files/PDB3f.sam -g2 bam_files/PQ1f.sam bam_files/PQ2f.sam bam_files/PQ3f.sam -as suppa_output_allevents/simpleEvents_genes.txt
