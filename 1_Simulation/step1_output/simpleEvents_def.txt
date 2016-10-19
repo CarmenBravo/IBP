@@ -1,3 +1,4 @@
+#ID, event type and number of transcripts in the genome of the genes that will be differentially expressed in the simulation.
 AT1G78710	SE	2
 AT1G47278	SE	2
 AT1G55840	SE	2
