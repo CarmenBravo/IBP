@@ -227,4 +227,92 @@ sed -i '/\t\*\t/d' PQ_filtered.sam
 module load tmux
 tmux new -s Simulation 
 python cal_NB_counts.py TAIR10_GFF3_genes.gff -g1 bam_files/MOCH_filtered.sam bam_files/MOCH_filtered.sam -g2 bam_files/PQ_filtered.sam bam_files/PQ_filtered.sam
+
+#Error but it seems to come out due to using the same files. Repeat mixing, different mixes:
+python cal_NB_counts.py TAIR10_GFF3_genes.gff -g1 bam_files/MOCH_filtered.sam bam_files/MOCH_filtered.sam bam_files/PQ_filtered.sam -g2 bam_files/PQ_filtered.sam bam_files/PQ_filtered.sam bam_files/MOCH_filtered.sam
+
+# CPU error. Remove one of the samples (PQ) in the second group:
+python cal_NB_counts.py TAIR10_GFF3_genes.gff -g1 bam_files/MOCH_filtered.sam bam_files/MOCH_filtered.sam bam_files/PQ_filtered.sam -g2 bam_files/PQ_filtered.sam bam_files/MOCH_filtered.sam
+
+# It does not work, we need more cores. Send job to hpc:
+qsub Simulation_step1.pbs 
+
+# Check if job is running:
+qstat
+qstat -u vsc31305
+qstat -q
+
+##################################################################################
+
+# Move everything to scratch (they gave me up to 200 GB in this folder):
+mv IBP $VSC_SCRATCH
+
+#Restart everything. Copy all files for MOCH and PQ.
+
+sudo scp -p -r bam_files/48U_WT_PQ_1.bam vsc31305@login2.hpc.kuleuven.be:/scratch/leuven/313/vsc31305/IBP/bam_files
+
+# Run ASfinder
+python ASfinder.py
+
+# Change bam notation (Takes quite long, 30 min each):
+
+cat TAIR10_GFF3_genes.gff | cut -f1 | uniq -c
+samtools view -H 48U_WT_MOCH_1.bam
+samtools view -h 48U_WT_MOCH_1.bam | awk 'BEGIN{FS=OFS="\t"} (/^@/ && !/@SQ/){print $0} $2~/^SN:[1-9]|^SN:Pt|^SN:Mt/{print $0}  $3~/^[1-9]|Pt|Mt/{$3="Chr"$3; print $0} ' | sed 's/SN:/SN:Chr/g' | sed 's/Mt/M/g' | sed 's/Pt/C/g' | samtools view -bS - > MOCH_1.bam
+samtools view -H MOCH_1.bam
+rm 48U_WT_MOCH_1.bam
+(…)
+
+# Create filtered bams and move old to another folder.
+samtools view -b -L ASgenome_reg.bed  MOCH_1.bam > MOCH1f.bam
+samtools view -b -L ASgenome_reg.bed  PQ_1.bam > PQ1f.bam
+(…)
+
+ls -l
+
+mkdir complete_bam
+mv MOCH_ complete_bam/
+mv PQ_ complete_bam/
+
+# Generate sam:
+for file in ./*.bam
+    do
+    echo $file 
+    samtools view -h -F 12 -f 3 $file > ${file/.bam/.sam}
+    done
+
+# Remove * lines (Takes a while):
+sed -i '/\t\*\t/d' MOCH1f.sam
+(…)
+
+# Run with two groups:
+module load Python/2.7.6-foss-2014a
+module load HTSeq
+module load R/3.2.1-foss-2014a-x11-tcl
+export PYTHONPATH="${VSC_HOME}/python_lib/lib/python2.7/site-packages/:${PYTHONPATH}"
+
+python cal_NB_counts.py TAIR10_GFF3_genes.gff -g1 bam_files/MOCH1f.sam bam_files/MOCH2f.sam -g2 bam_files/PQ1f.sam bam_files/PQ2f.sam
  
+# Failed. Send pbs.
+
+#########################################################################################
+
+# Convert PDB bam as before. (Everything done for MOCH, we do it for PDB).
+
+# Install suppa. Do locally:
+
+https://bitbucket.org/regulatorygenomicsupf/suppa
+wget 'https://bootstrap.pypa.io/get-pip.py'
+sudo python3.4 get-pip.py
+sudo pip3 install --upgrade pip3.4
+python3.4 suppa/suppa.py generateEvents -i TAIR10_GTF_genes.gtf -o Suppa_output -e SE SS RI
+python3.4 suppa/suppa.py generateEvents -i TAIR10_GTF_genes.gtf -o Suppa_output_allevents -e SE SS RI MX FL
+rename "Suppa_output_allevents_" "" *
+
+# Transfer to hpc. Select those genes which are known to be only SE, only RI or SS. 
+
+# Run new program
+python cal_NB_counts.py TAIR10_GFF3_genes.gff -g1 bam_files/PDB1f.sam bam_files/PDB2f.sam bam_files/PDB3f.sam -g2 bam_files/PQ1f.sam bam_files/PQ2f.sam bam_files/PQ3f.sam -as suppa_output_allevents/simpleEvents_genes.txt
+
+# Grep non expressed genes:
+awk '$2 == 0' group1.nbcounts | awk '$3 == 0'| awk '$4 == 0’|cut -f1
