@@ -19,10 +19,11 @@ fi
 
 echo $GTF
 # Make flattened GFF-file out of GTF file.
-python ${PY_PATH}/dexseq_prepare_annotation.py ${DATA_PATH}/feature_files/TAIR10_GTF_genes.gtf ${DATA_PATH}/feature_files/DEXSeq_FlattenedFeatureFile.gff
+python ${PY_PATH}/dexseq_prepare_annotation.py -r no ${DATA_PATH}/feature_files/TAIR10_GTF_genes.gtf ${DATA_PATH}/feature_files/DEXSeq_FlattenedFeatureFile.gff
 
 for file in ${DATA_PATH}/bam_files/*.bam; do
-python ${PY_PATH}/dexseq_count.py -f bam ${DATA_PATH}/feature_files/DEXSeq_FlattenedFeatureFile.gff ${file}  ${DATA_PATH}/DEXSeq_output/HTSeqCount_files/${file}_count.txt
+fileName=$(basename $file| grep -Po '.*(?=\.)')
+python ${PY_PATH}/dexseq_count.py -f bam ${DATA_PATH}/feature_files/DEXSeq_FlattenedFeatureFile.gff ${file}  ${DATA_PATH}/DEXSeq_output/HTSeqCount_files/${fileName}_count.txt
 done
 
 Rscript DEXSeqScript.R $DATA_PATH $NCORES
